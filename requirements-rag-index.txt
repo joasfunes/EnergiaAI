@@ -1,0 +1,4 @@
+# Subetapa 04.1. Además se requiere ejecutar Ollama localmente.
+# Se fijarán versiones exactas al estabilizar el entorno Windows.
+chromadb>=1.0,<2.0
+ollama>=0.5,<1.0
