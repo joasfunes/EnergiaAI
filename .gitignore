@@ -27,3 +27,10 @@ data/raw/
 
 # Resultado local de la auditoría
 data/processed/auditoria_fuentes.csv
+
+# Metadatos generados por instalaciones de Python
+*.egg-info/
+
+# Carpetas de compilacion
+build/
+dist/
