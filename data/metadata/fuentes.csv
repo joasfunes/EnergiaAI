@@ -1,0 +1,3 @@
+id,tipo,organismo,titulo,url,ruta_local,fecha_publicacion,vigencia_desde,vigencia_hasta_prevista,estado_validacion
+EPRE-221-2026,tarifa,EPRE Mendoza,Resolución EPRE 221/2026 - cuadros al usuario final,https://epremendoza.gob.ar/2019/resoluciones-anexos/Res%20221-2026.pdf,data/raw/tariffs/mendoza/edemsa/resolucion_epre_221_2026.pdf,2026-11-05,2026-11-01,2027-01-31,pendiente_revision_de_tablas
+ARG-RES-2024,conocimiento,Secretaría de Energía de la Nación,Residencial - buenas prácticas para reducir consumo,https://www.argentina.gob.ar/sites/default/files/guia_residencial_enereficiente.pdf,data/raw/documents/argentina/guia_residencial_2024.pdf,2024-06,,,pendiente_revision_documental
