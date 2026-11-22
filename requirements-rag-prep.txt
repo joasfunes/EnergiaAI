@@ -1,0 +1,5 @@
+# Solo Research side / preparacion documental de Etapa 02.3.
+# En la entrega final estas dependencias se consolidaran en requirements.txt.
+PyMuPDF>=1.24,<2
+beautifulsoup4>=4.12,<5
+requests>=2.32,<3
