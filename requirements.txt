@@ -1,0 +1,3 @@
+# Etapa 01 - sin dependencias externas.
+# Los diagnósticos y pruebas usan exclusivamente la biblioteca estándar.
+# Cada nueva etapa agregará y fijará las dependencias necesarias.
