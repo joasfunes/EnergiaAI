@@ -11,6 +11,9 @@ from typing import Any, Protocol
 from energia_ai.rag.corpus import SOURCES
 
 MAX_RESULTS = 5
+# Umbral EXPERIMENTAL basado en la línea base con EmbeddingGemma y Chroma.
+# Debe revisarse con más consultas de dominio/fuera de dominio; no es probabilidad.
+MAX_PROVISIONAL_DISTANCE = 1.45
 OFFICIAL_SOURCES = {source.id: source for source in SOURCES}
 
 
@@ -68,6 +71,12 @@ def recuperar_consejos(
             continue
         if not math.isfinite(distancia) or distancia < 0:
             advertencias.append("Se descartó un resultado con distancia no válida.")
+            continue
+        if distancia > MAX_PROVISIONAL_DISTANCE:
+            advertencias.append(
+                "Evidencia insuficiente bajo el umbral provisional de distancia; "
+                "no presentar este fragmento como respaldo."
+            )
             continue
         pagina = encontrado.get("page")
         if fuente.kind == "pdf":

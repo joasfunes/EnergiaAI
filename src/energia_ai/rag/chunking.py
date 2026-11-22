@@ -10,6 +10,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
+import unicodedata
 from typing import Any
 
 from energia_ai.rag.corpus import SOURCES, safe_path
@@ -17,7 +18,8 @@ from energia_ai.rag.corpus import SOURCES, safe_path
 
 DEFAULT_CHUNK_SIZE = 900
 DEFAULT_CHUNK_OVERLAP = 130
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
+CHUNK_STRATEGY = "recursive_paragraph_sentence_v2"
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,91 @@ def split_text(text: str, *, size: int = DEFAULT_CHUNK_SIZE,
         start = next_start
     return parts
 
+
+
+def clean_retrieval_text(text: str) -> str:
+    """Normaliza texto del corpus sin alterar números ni afirmaciones técnicas.
+
+    Preserva párrafos y listas. Elimina marcas repetitivas de editorial que
+    ya están representadas en los metadatos; NO intenta arreglar tablas PDF.
+    """
+    if not isinstance(text, str):
+        raise TypeError("El texto del corpus debe ser una cadena")
+    text = unicodedata.normalize("NFKC", text).replace("\u00ad", "")
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(
+        r"(?i)Secretar[ií]a de Energ[ií]a\s+Subsecretar[ií]a de Transici[oó]n y Planeamiento Energ[eé]tico",
+        " ", text,
+    )
+    # Un solo salto de línea en extracción PDF suele ser visual; dos delimitan párrafo.
+    paragraphs = re.split(r"\n\s*\n+", text)
+    cleaned = []
+    for paragraph in paragraphs:
+        p = re.sub(r"\s+", " ", paragraph).strip()
+        if p:
+            cleaned.append(p)
+    return "\n\n".join(cleaned)
+
+
+def _units_for_paragraph(paragraph: str, size: int) -> list[str]:
+    """Mantiene párrafos completos y divide por oraciones solo si hace falta."""
+    if len(paragraph) <= size:
+        return [paragraph]
+    sentences = re.split(r"(?<=[.!?;:])\s+(?=[A-ZÁÉÍÓÚÜÑ0-9¿¡-])", paragraph)
+    result: list[str] = []
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        if len(sentence) <= size:
+            result.append(sentence)
+        else:
+            # Fallback para oraciones excepcionalmente largas y PDF mal extraído.
+            result.extend(split_text(sentence, size=size, overlap=0))
+    return result
+
+
+def split_text_recursive(text: str, *, size: int = DEFAULT_CHUNK_SIZE,
+                         overlap: int = DEFAULT_CHUNK_OVERLAP) -> list[str]:
+    """Fragmentación por párrafos/oraciones con solapamiento de unidades completas.
+
+    Overlap es objetivo aproximado (en caracteres), nunca garantiza un valor
+    exacto: preferimos no iniciar un fragmento en mitad de una oración.
+    """
+    if size < 100 or overlap < 0 or overlap >= size // 2:
+        raise ValueError("Usar size>=100 y overlap entre 0 y menos de size/2")
+    cleaned = clean_retrieval_text(text)
+    if not cleaned:
+        return []
+    units = [unit for paragraph in cleaned.split("\n\n")
+             for unit in _units_for_paragraph(paragraph, size)]
+    chunks: list[str] = []
+    buf: list[str] = []
+    for unit in units:
+        if not buf:
+            buf = [unit]
+            continue
+        proposed = "\n\n".join([*buf, unit])
+        if len(proposed) <= size:
+            buf.append(unit)
+            continue
+        chunks.append("\n\n".join(buf))
+        retained: list[str] = []
+        if overlap:
+            # Reciclar frases/párrafos completos, sin exceder el tamaño del chunk.
+            for prev in reversed(buf):
+                candidate = [prev, *retained]
+                if len("\n\n".join(candidate)) > overlap or len("\n\n".join([*candidate, unit])) > size:
+                    break
+                retained.insert(0, prev)
+        buf = [*retained, unit]
+    if buf:
+        last = "\n\n".join(buf)
+        if not chunks or chunks[-1] != last:
+            chunks.append(last)
+    if any(not chunk or len(chunk) > size for chunk in chunks):
+        raise RuntimeError("El chunking recursivo produjo una ventana inválida")
+    return chunks
 
 def extract_body(markdown: str, expected_id: str, expected_url: str,
                  expected_sha: str) -> str:
@@ -125,7 +212,7 @@ def load_chunks(project_root: Path, *, size: int = DEFAULT_CHUNK_SIZE,
             raise ValueError(f"Documento demasiado corto: {source.id}")
         count_for_source = 0
         for page, text in page_sections(body, source.kind == "pdf"):
-            for fragment in split_text(text, size=size, overlap=overlap):
+            for fragment in split_text_recursive(text, size=size, overlap=overlap):
                 # Hash estable para reproducibilidad, páginas y contenido.
                 digest = sha256(f"{source.id}\0{page}\0{fragment}".encode("utf-8")).hexdigest()[:24]
                 metadata = {
@@ -135,6 +222,8 @@ def load_chunks(project_root: Path, *, size: int = DEFAULT_CHUNK_SIZE,
                     "published": source.published,
                     "region": source.region,
                     "topic": source.topic,
+                    "season": ("winter" if source.id == "EPRE-INV-2022" else
+                               "summer" if source.id == "EPRE-VER-2025" else "general"),
                     "url": source.official_url,
                     "page": page,  # cero significa publicación web (sin paginación)
                     "sha256_raw": fingerprint,
@@ -152,6 +241,7 @@ def corpus_fingerprint(chunks: list[RagChunk], *, model: str,
                        size: int, overlap: int) -> str:
     data = {
         "schema": MANIFEST_VERSION,
+        "chunk_strategy": CHUNK_STRATEGY,
         "model": model,
         "chunk_size": size,
         "chunk_overlap": overlap,

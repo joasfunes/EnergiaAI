@@ -9,11 +9,13 @@ from dataclasses import dataclass
 import json
 import math
 import os
+import re
+import unicodedata
 from pathlib import Path
 from typing import Any, Protocol
 
 from energia_ai.rag.chunking import (
-    DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, corpus_fingerprint, load_chunks,
+    DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, CHUNK_STRATEGY, corpus_fingerprint, load_chunks,
 )
 from energia_ai.rag.corpus import safe_path
 
@@ -138,6 +140,7 @@ def create_index(project_root: Path, *, rebuild: bool = False,
         "embedding_dimensions": len(vectors[0]),
         "chunk_size": chunk_size,
         "chunk_overlap": overlap,
+        "chunk_strategy": CHUNK_STRATEGY,
         "chunks": len(chunks),
         "documents": len(set(c.metadata["source_id"] for c in chunks)),
         "fingerprint": signature,
@@ -147,6 +150,22 @@ def create_index(project_root: Path, *, rebuild: bool = False,
     temporary.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(temporary, manifest_path)
     return manifest
+
+
+
+def infer_season(question: str) -> str | None:
+    """Detecta únicamente un contexto estacional explícito y no ambiguo.
+
+    No sustituye la recuperación semántica; solo evita mezclar consejos de
+    invierno con verano. Si hay señales contradictorias, no filtra.
+    """
+    norm = unicodedata.normalize("NFKD", question.casefold())
+    norm = "".join(char for char in norm if not unicodedata.combining(char))
+    winter = bool(re.search(r"\b(invierno|frio|calefaccion|caloventores?|estufas?)\b", norm))
+    summer = bool(re.search(r"\b(verano|refrigeracion|ola de calor|mucho calor|dias? de calor|temperaturas? altas?)\b", norm))
+    if winter == summer:
+        return None
+    return "winter" if winter else "summer"
 
 
 class RagSearcher:
@@ -160,6 +179,8 @@ class RagSearcher:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("embedding_model") != model_name:
             raise ValueError("Modelo de embeddings distinto al usado para construir el índice")
+        if manifest.get("chunk_strategy") != CHUNK_STRATEGY:
+            raise ValueError("Índice con estrategia de chunking anterior: ejecutar respaldo y --rebuild")
         self.embedder = embedder if embedder is not None else OllamaEmbedder(model_name)
         self.client = client if client is not None else _client(safe_path(root, INDEX_DIR))
         self.collection = _collection(self.client, create=False)
@@ -176,16 +197,23 @@ class RagSearcher:
         embedding = validate_vectors(self.embedder.embed([question]), 1)[0]
         if len(embedding) != self.manifest["embedding_dimensions"]:
             raise ValueError("Dimensión de consulta distinta a la del índice")
+        # Para el corpus pequeño del MVP recuperamos candidatos adicionales y
+        # después descartamos la estación opuesta cuando la pregunta es clara.
+        # En corpus grandes, reemplazar esto por filtros por metadatos en Chroma.
+        candidate_count = min(self.collection.count(), max(k * 6, 18))
         retrieved = self.collection.query(
             query_embeddings=[embedding],
-            n_results=min(k, self.collection.count()),
+            n_results=candidate_count,
             include=["documents", "metadatas", "distances"],
         )
         texts = retrieved["documents"][0]
         metas = retrieved["metadatas"][0]
         distances = retrieved["distances"][0]
         matches: list[dict[str, Any]] = []
+        season = infer_season(question)
         for text, meta, distance in zip(texts, metas, distances):
+            if season is not None and meta.get("season", "general") not in (season, "general"):
+                continue
             page = int(meta["page"])
             citation = f'{meta["title"]} (p. {page})' if page else f'{meta["title"]} (publicación web)'
             matches.append({
@@ -196,4 +224,4 @@ class RagSearcher:
                 "page": page if page else None,
                 "distance": float(distance),
             })
-        return matches
+        return matches[:k]
