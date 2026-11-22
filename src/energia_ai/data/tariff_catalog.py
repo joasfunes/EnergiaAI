@@ -124,7 +124,7 @@ CATALOGO_EDEMSA_221_2026 = CatalogoTarifario(
     # Ventana de cobertura del MVP, NO aseveración de vigencia jurídica
     # inmutable: debe revisarse ante nuevas resoluciones.
     cobertura_hasta=date(2027, 1, 31),
-    estado_revision="PENDIENTE_CONTRASTE_CON_PDF_LOCAL",
+    estado_revision="CONTRASTADO_CON_PDF_LOCAL",
     facturacion_minima_kwh_bimestral=45,
     nota_sef=(
         "Anexo I: noviembre, base SEF de 400 kWh/bimestre; "
