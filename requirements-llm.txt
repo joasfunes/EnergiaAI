@@ -1,0 +1,5 @@
+# Etapa 05.1: modelo local + agente piloto.
+# Se restringen versiones mayores para evitar cambios incompatibles.
+langchain>=1.4,<2.0
+langchain-ollama>=1.1,<2.0
+langgraph>=1.0,<2.0
