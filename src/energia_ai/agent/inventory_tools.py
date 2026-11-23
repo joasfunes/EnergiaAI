@@ -20,13 +20,17 @@ def crear_tools_inventario(repositorio: InventarioHogar, hogar_id: str) -> tuple
 
         Potencia en W y horas efectivas diarias como números decimales expresados en texto.
         Si faltan datos, primero solicitarlos. No reemplaza equipos existentes.
+        Devuelve el inventario POSTERIOR al registro para evitar lecturas obsoletas.
         """
         try:
-            return repositorio.registrar_equipo(
+            respuesta = repositorio.registrar_equipo(
                 hogar_id, id=id, nombre=nombre, potencia_watts=potencia_watts,
                 horas_efectivas_por_dia=horas_efectivas_por_dia,
                 dias_de_uso=dias_de_uso, cantidad=cantidad,
             )
+            # Confirmación post-escritura: el LLM puede utilizarla sin confiar en
+            # una consulta anterior ejecutada en paralelo. No altera registro viejo.
+            return {**respuesta, "inventario_actualizado": repositorio.consultar(hogar_id)}
         except ValueError as exc:
             return {"estado": "error", "codigo": "DATOS_INVALIDOS", "mensaje": str(exc)}
 

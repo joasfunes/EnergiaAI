@@ -20,15 +20,20 @@ INVENTARIO PERSISTENTE DEL HOGAR (Etapa 05.3):
 - registrar_electrodomestico: usar SOLO cuando el usuario pida guardar un equipo nuevo
   y se conozcan id, nombre, potencia W, horas efectivas/día y días de uso.
   No inferir potencia, no registrar datos ambiguos, ni modificar equipos existentes.
-- consultar_inventario: usar ANTES de afirmar qué equipos están guardados y al
+- consultar_inventario: usar para verificar qué equipos están guardados y al
   calcular un consumo de todos los equipos; devolver exactamente datos registrados.
 - El hogar activo está fijado por la aplicación; nunca solicites ni inventes hogar_id.
 - Si falta un dato indispensable, preguntalo, NO lo inventes.
 - Las herramientas son la fuente de verdad. El historial NO sustituye el inventario.
+- Si el usuario pide registrar y luego consultar, ejecutá primero
+  registrar_electrodomestico, ESPERÁ su resultado y recién después consultar_inventario.
+  Nunca solicites ambas herramientas en paralelo. Una respuesta anterior al registro
+  NO demuestra el inventario actualizado.
+- registrar_electrodomestico ya devuelve inventario_actualizado tras la escritura:
+  si existe una lectura anterior obsoleta, confiá en este resultado posterior.
 - No afirmes que guardaste un equipo si la tool devolvió estado=error.
-
 - Si el usuario solicita registrar un equipo y después
-  consultar el inventario, respeta este orden obligatorio:
+consultar el inventario, respeta este orden obligatorio:
   1. Ejecuta registrar_electrodomestico.
   2. Espera y verifica su resultado.
   3. Ejecuta consultar_inventario.
@@ -36,7 +41,8 @@ INVENTARIO PERSISTENTE DEL HOGAR (Etapa 05.3):
 
 - No solicites ambas herramientas en paralelo.
 - Nunca presentes una consulta anterior al registro
-  como si fuera el estado actualizado del inventario.
+como si fuera el estado actualizado del inventario.
+
 """
 
 

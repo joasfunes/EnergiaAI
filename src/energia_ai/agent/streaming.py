@@ -43,12 +43,15 @@ def eventos_de_actualizacion(update: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def transmitir_turno(agente: Any, *, consulta: str, thread_id: str,
-                     notificar: Callable[[dict[str, str]], None]) -> None:
+                     notificar: Callable[[dict[str, str]], None],
+                     callbacks: list[Any] | None = None) -> None:
     if not isinstance(consulta, str) or not consulta.strip():
         raise ValueError("La consulta no puede estar vacía")
     if not callable(notificar):
         raise TypeError("notificar debe ser una función")
     config = configuracion_thread(thread_id)
+    if callbacks is not None:
+        config["callbacks"] = callbacks
     # Se fija expresamente v1 para interpretar sus tuplas (modo, dato).
     for modo, payload in agente.stream(
         {"messages": [{"role": "user", "content": consulta.strip()}]},
