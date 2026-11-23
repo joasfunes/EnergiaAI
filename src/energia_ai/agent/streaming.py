@@ -68,6 +68,10 @@ def transmitir_turno(agente: Any, *, consulta: str, thread_id: str,
             if text:
                 notificar({"tipo": "texto", "texto": text})
         elif modo == "updates" and isinstance(payload, dict):
+            # La solicitud de herramienta es distinta de su ejecución confirmada.
+            from energia_ai.ui.presentation import solicitudes_en_update
+            for evento in solicitudes_en_update(payload):
+                notificar(evento)
             for evento in eventos_de_actualizacion(payload):
                 notificar(evento)
     notificar({"tipo": "fin"})
