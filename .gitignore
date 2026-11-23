@@ -34,3 +34,6 @@ data/processed/auditoria_fuentes.csv
 # Carpetas de compilacion
 build/
 dist/
+
+# Datos locales del hogar e historial del agente
+data/state/

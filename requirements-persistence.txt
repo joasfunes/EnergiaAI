@@ -1,0 +1,2 @@
+# Integración oficial SQLite para checkpointers LangGraph (síncrona)
+langgraph-checkpoint-sqlite>=2.0,<4.0
