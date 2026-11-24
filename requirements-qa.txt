@@ -1,0 +1,4 @@
+# Dependencias de verificaciones PDF para 06.4.
+# requirements-report.txt es necesario para los informes con ReportLab.
+-r requirements-report.txt
+pypdf>=5,<7
