@@ -14,6 +14,7 @@ from energia_ai.ui.conversations import IndiceConversaciones
 from energia_ai.ui.presentation import cargar_medicion_06_1
 from energia_ai.ui.runtime import recuperar_historial, ejecutar_stream_ui
 from energia_ai.ui.reporting import preparar_pdf_conversacion
+from energia_ai.ui.inventory_editor import mostrar_editor_inventario
 from energia_ai.reporting import InformeNoDisponible
 
 ESTADO_DIR = Path("data/state")
@@ -35,25 +36,30 @@ def main() -> None:
         except ValueError:
             st.error("Usá un ID de hogar alfanumérico, con _ o -, sin espacios.")
             st.stop()
-        indice = IndiceConversaciones(INDICE_DB)
-        key_selector = f"conv_select_{hogar_id}"
-        if st.button("➕ Nueva conversación", use_container_width=True):
-            st.session_state[key_selector] = indice.crear(hogar_id)
-            st.rerun()
-        opciones = indice.listar(hogar_id)
-        if not opciones:
-            st.session_state[key_selector] = indice.crear(hogar_id)
+        seccion = st.radio("Sección", ("Consultor IA", "Mis electrodomésticos"),
+                           help="Administrá tus equipos sin esperar al modelo de IA.")
+        if seccion == "Mis electrodomésticos":
+            st.info("El inventario se gestiona directamente en la tabla, sin Qwen.")
+        if seccion == "Consultor IA":
+            indice = IndiceConversaciones(INDICE_DB)
+            key_selector = f"conv_select_{hogar_id}"
+            if st.button("➕ Nueva conversación", use_container_width=True):
+                st.session_state[key_selector] = indice.crear(hogar_id)
+                st.rerun()
             opciones = indice.listar(hogar_id)
-        disponibles = [c["thread_id"] for c in opciones]
-        if st.session_state.get(key_selector) not in disponibles:
-            st.session_state[key_selector] = disponibles[0]
-        titulos = {c["thread_id"]: f'{c["titulo"]} · {c["creada_utc"][:16]}' for c in opciones}
-        thread_id = st.selectbox("Conversación", options=disponibles,
-                                 format_func=lambda tid: titulos.get(tid, tid), key=key_selector)
-        indice.comprobar(hogar_id, thread_id)
-        st.caption("ID de la conversación:")
-        st.code(thread_id, language=None)
-        st.caption("Los mensajes se recuperan de SQLite por thread_id; no se copian al navegador como fuente de verdad.")
+            if not opciones:
+                st.session_state[key_selector] = indice.crear(hogar_id)
+                opciones = indice.listar(hogar_id)
+            disponibles = [c["thread_id"] for c in opciones]
+            if st.session_state.get(key_selector) not in disponibles:
+                st.session_state[key_selector] = disponibles[0]
+            titulos = {c["thread_id"]: f'{c["titulo"]} · {c["creada_utc"][:16]}' for c in opciones}
+            thread_id = st.selectbox("Conversación", options=disponibles,
+                                     format_func=lambda tid: titulos.get(tid, tid), key=key_selector)
+            indice.comprobar(hogar_id, thread_id)
+            st.caption("ID de la conversación:")
+            st.code(thread_id, language=None)
+            st.caption("Los mensajes se recuperan de SQLite por thread_id; no se copian al navegador como fuente de verdad.")
 
         with st.expander("Inventario registrado", expanded=False):
             repo = InventarioHogar(ESTADO_DIR / "inventario.sqlite3")
@@ -83,6 +89,10 @@ def main() -> None:
 
         st.warning("Prototipo SIN autenticación. Usar exclusivamente en localhost; no exponer a internet.")
 
+    if seccion == "Mis electrodomésticos":
+        mostrar_editor_inventario(hogar_id, estado_dir=ESTADO_DIR)
+        return
+
     st.subheader("Conversación")
     try:
         anteriores = recuperar_historial(hogar_id=hogar_id, thread_id=thread_id)
@@ -95,7 +105,8 @@ def main() -> None:
             st.markdown(entrada["content"])
 
     if not anteriores:
-        st.info("Consultá tus consumos, registrá equipos o pedí recomendaciones energéticas con fuentes oficiales.")
+        st.info("Consultá tus consumos o pedí recomendaciones energéticas con fuentes oficiales. "
+                "Para agregar equipos, abrí Mis electrodomésticos.")
 
     # Etapa 06.3: PDF reproducible a partir de resultados REALES almacenados en
     # SQLite. No vuelve a invocar el LLM ni toma cifras de su texto libre.

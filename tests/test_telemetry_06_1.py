@@ -152,39 +152,35 @@ class TestTelemetry(unittest.TestCase):
             guardar_resumen(ruta, {"duracion_total_s": 17.2})
             self.assertEqual(json.loads(ruta.read_text(encoding="utf-8"))["duracion_total_s"], 17.2)
 
-    def test_prompt_pide_orden_y_no_paralelizar(self):
-        self.assertIn("primero", PROMPT_INVENTARIO)
-        self.assertIn("paralelo", PROMPT_INVENTARIO)
+    def test_prompt_deriva_registros_a_interfaz(self):
+        self.assertIn('Mis electrodomésticos', PROMPT_INVENTARIO)
+        self.assertIn('No disponés de herramientas', PROMPT_INVENTARIO)
 
-    def test_registro_devuelve_inventario_actualizado(self):
+    def test_lectura_refleja_cambios_de_servicio(self):
         with tempfile.TemporaryDirectory() as folder:
-            repo = InventarioHogar(Path(folder) / "inv.sqlite3")
-            repo.asegurar_hogar("casa_demo")
-            module = types.ModuleType("langchain_core.tools")
+            repo = InventarioHogar(Path(folder) / 'inv.sqlite3')
+            repo.asegurar_hogar('casa_demo')
+            module = types.ModuleType('langchain_core.tools')
             module.tool = lambda fn: fn
-            with patch.dict(sys.modules, {"langchain_core": types.ModuleType("langchain_core"),
-                                         "langchain_core.tools": module}):
-                registrar, consultar = crear_tools_inventario(repo, "casa_demo")
-            primero = consultar()
-            despues = registrar(id="tv_1", nombre="Televisor", potencia_watts="100",
-                                horas_efectivas_por_dia="5", dias_de_uso=20, cantidad=1)
-            self.assertEqual(primero["cantidad_equipos"], 0)
-            self.assertEqual(despues["inventario_actualizado"]["cantidad_equipos"], 1)
-            self.assertEqual(despues["inventario_actualizado"]["equipos"][0]["id"], "tv_1")
+            with patch.dict(sys.modules, {'langchain_core': types.ModuleType('langchain_core'),
+                                         'langchain_core.tools': module}):
+                (consultar,) = crear_tools_inventario(repo, 'casa_demo')
+            self.assertEqual(consultar()['cantidad_equipos'], 0)
+            repo.registrar_equipo('casa_demo', id='tv_1', nombre='Televisor',
+                                 potencia_watts='100', horas_efectivas_por_dia='5', dias_de_uso=20)
+            self.assertEqual(consultar()['cantidad_equipos'], 1)
 
-    def test_registro_fallido_no_muestra_inventario_ficticio(self):
+    def test_agente_no_puede_registrar(self):
         with tempfile.TemporaryDirectory() as folder:
-            repo = InventarioHogar(Path(folder) / "inv.sqlite3")
-            repo.asegurar_hogar("casa_demo")
-            module = types.ModuleType("langchain_core.tools")
+            repo = InventarioHogar(Path(folder) / 'inv.sqlite3')
+            repo.asegurar_hogar('casa_demo')
+            module = types.ModuleType('langchain_core.tools')
             module.tool = lambda fn: fn
-            with patch.dict(sys.modules, {"langchain_core": types.ModuleType("langchain_core"),
-                                         "langchain_core.tools": module}):
-                registrar, _ = crear_tools_inventario(repo, "casa_demo")
-            fail = registrar(id="tv_1", nombre="Televisor", potencia_watts="invalido",
-                             horas_efectivas_por_dia="5", dias_de_uso=20)
-            self.assertEqual(fail["estado"], "error")
-            self.assertNotIn("inventario_actualizado", fail)
+            with patch.dict(sys.modules, {'langchain_core': types.ModuleType('langchain_core'),
+                                         'langchain_core.tools': module}):
+                tools = crear_tools_inventario(repo, 'casa_demo')
+            self.assertEqual(len(tools), 1)
+            self.assertNotIn('registrar_electrodomestico', [t.__name__ for t in tools])
 
 
 if __name__ == "__main__":
