@@ -51,6 +51,8 @@ def main() -> None:
         thread_id = st.selectbox("Conversación", options=disponibles,
                                  format_func=lambda tid: titulos.get(tid, tid), key=key_selector)
         indice.comprobar(hogar_id, thread_id)
+        st.caption("ID de la conversación:")
+        st.code(thread_id, language=None)
         st.caption("Los mensajes se recuperan de SQLite por thread_id; no se copian al navegador como fuente de verdad.")
 
         with st.expander("Inventario registrado", expanded=False):
