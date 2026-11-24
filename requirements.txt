@@ -1,3 +1,11 @@
-# Etapa 01 - sin dependencias externas.
-# Los diagnósticos y pruebas usan exclusivamente la biblioteca estándar.
-# Cada nueva etapa agregará y fijará las dependencias necesarias.
+# Dependencias consolidadas para reproducir EnergiaAI (Etapa 07.1).
+# Estas referencias utilizan los rangos definidos y probados por subetapas.
+# No garantiza reproducibilidad bit a bit: ver docs/ETAPA_07_1.md.
+-r requirements-rag-prep.txt
+-r requirements-rag-index.txt
+-r requirements-tools.txt
+-r requirements-llm.txt
+-r requirements-persistence.txt
+-r requirements-ui.txt
+-r requirements-report.txt
+-r requirements-qa.txt

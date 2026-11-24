@@ -1,39 +1,29 @@
-# Entornos y cachés de Python
+# Python local y artefactos de build
 .venv/
 venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
 .pytest_cache/
 .ruff_cache/
 
-# Claves y configuración privada
+# Archivos privados y datos derivados
 .env
 .env.*
 !.env.example
-
-# Archivos locales y generados
-.vscode/
-outputs/
+data/raw/
 data/processed/
 data/vectorstore/
+data/state/
+outputs/
 *.log
 
-# Sistema operativo
+# Entorno y editor
+.vscode/
 .DS_Store
 Thumbs.db
 
-# Documentos originales descargados
-data/raw/
-
 # Resultado local de la auditoría
 data/processed/auditoria_fuentes.csv
-
-# Metadatos generados por instalaciones de Python
-*.egg-info/
-
-# Carpetas de compilacion
-build/
-dist/
-
-# Datos locales del hogar e historial del agente
-data/state/
