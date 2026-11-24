@@ -34,7 +34,12 @@ def ejecutar_stream_ui(*, hogar_id: str, thread_id: str, consulta: str,
                     thread_id=thread_id, notificar=lambda e: cola.put(("evento", e)))
                 cola.put(("resumen", resumen))
         except Exception as exc:
-            # No enviar mensajes crudos: podrían contener la consulta o credenciales.
+            print("\n=== ERROR DEL AGENTE ===")
+            print("Tipo:", type(exc).__name__)
+            print("HTTP:", getattr(exc, "status_code", "No disponible"))
+            print("Detalle:", str(exc)[:1000])
+            print("=======================\n")
+
             cola.put(("error", type(exc).__name__))
         finally:
             cola.put(("fin_worker", None))
