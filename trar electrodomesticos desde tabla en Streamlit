@@ -1,0 +1,11 @@
+ app.py                                     |  49 [32m++++++[m[31m-----[m
+ docs/MEJORA_INVENTARIO_MANUAL_07_3.md      | 115 [32m+++++++++++++++++++++++++[m
+ src/energia_ai/agent/inventory_tools.py    |  35 [32m++[m[31m------[m
+ src/energia_ai/agent/persistent_runtime.py |  40 [32m+++[m[31m------[m
+ src/energia_ai/services/home_inventory.py  |  83 [32m++++++++++++++++[m[31m--[m
+ src/energia_ai/ui/inventory_editor.py      | 132 [32m+++++++++++++++++++++++++++++[m
+ tests/test_inventory_editor_07_3.py        | 101 [32m++++++++++++++++++++++[m
+ tests/test_inventory_tools.py              |  36 [32m++++[m[31m----[m
+ tests/test_persistent_runtime.py           |   7 [32m+[m[31m-[m
+ tests/test_telemetry_06_1.py               |  52 [32m++++++[m[31m------[m
+ 10 files changed, 516 insertions(+), 134 deletions(-)
