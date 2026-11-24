@@ -1,0 +1,4 @@
+# Etapa 06.3: generación de PDF mediante ReportLab Platypus y gráficos vectoriales.
+# Requiere los paquetes ya instalados de las etapas 01-06.2.
+reportlab>=4.2,<5.0
+pypdf

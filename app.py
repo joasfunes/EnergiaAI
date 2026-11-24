@@ -1,4 +1,4 @@
-"""EnergiaAI 06.2 — chat académico local sobre el agente persistente de la Etapa 05.
+"""EnergiaAI 06.3 — chat local y exportación PDF de un análisis real.
 
 Iniciar desde la raíz: python -m streamlit run app.py --server.address 127.0.0.1
 NO desplegar públicamente: esta versión no tiene autenticación/autorización.
@@ -13,6 +13,8 @@ from energia_ai.services.home_inventory import InventarioHogar, validar_hogar_id
 from energia_ai.ui.conversations import IndiceConversaciones
 from energia_ai.ui.presentation import cargar_medicion_06_1
 from energia_ai.ui.runtime import recuperar_historial, ejecutar_stream_ui
+from energia_ai.ui.reporting import preparar_pdf_conversacion
+from energia_ai.reporting import InformeNoDisponible
 
 ESTADO_DIR = Path("data/state")
 INDICE_DB = ESTADO_DIR / "conversaciones_ui.sqlite3"
@@ -93,9 +95,47 @@ def main() -> None:
     if not anteriores:
         st.info("Consultá tus consumos, registrá equipos o pedí recomendaciones energéticas con fuentes oficiales.")
 
+    # Etapa 06.3: PDF reproducible a partir de resultados REALES almacenados en
+    # SQLite. No vuelve a invocar el LLM ni toma cifras de su texto libre.
+    st.subheader("Informe energético descargable")
+    st.caption("Generá un PDF del último turno de esta conversación que haya ejecutado simular_ahorro. "
+               "Las recomendaciones solo se adjuntan si buscar_consejos se ejecutó en ese mismo turno.")
+    clave_reporte = f"informe_pdf_{hogar_id}_{thread_id}"
+    clave_meta = f"informe_meta_{hogar_id}_{thread_id}"
+    if st.button("Preparar informe PDF", key=f"crear_pdf_{hogar_id}_{thread_id}"):
+        try:
+            indice.comprobar(hogar_id, thread_id)
+            datos_pdf, meta = preparar_pdf_conversacion(hogar_id=hogar_id, thread_id=thread_id)
+            st.session_state[clave_reporte] = datos_pdf
+            st.session_state[clave_meta] = meta
+        except InformeNoDisponible as exc:
+            st.session_state.pop(clave_reporte, None)
+            st.session_state.pop(clave_meta, None)
+            st.warning(str(exc))
+        except Exception as exc:
+            st.session_state.pop(clave_reporte, None)
+            st.session_state.pop(clave_meta, None)
+            st.error(f"No fue posible generar el informe ({type(exc).__name__}).")
+    if clave_reporte in st.session_state:
+        meta = st.session_state.get(clave_meta, {})
+        cols = st.columns(3)
+        cols[0].metric("Consumo actual", f"{meta.get('consumo_actual_kwh', '—')} kWh")
+        cols[1].metric("Consumo propuesto", f"{meta.get('consumo_propuesto_kwh', '—')} kWh")
+        cols[2].metric("Ahorro energético", f"{meta.get('ahorro_kwh', '—')} kWh")
+        if not meta.get('evidencias_rag'):
+            st.info("El análisis seleccionado no contiene fuentes RAG del mismo turno; "
+                    "el PDF lo explicará sin inventar recomendaciones.")
+        st.download_button("Descargar informe energético (PDF)",
+                           data=st.session_state[clave_reporte],
+                           file_name="EnergiaAI_informe_energetico.pdf",
+                           mime="application/pdf", key=f"descargar_pdf_{hogar_id}_{thread_id}")
+
     consulta = st.chat_input("Escribí tu consulta sobre consumo o ahorro eléctrico…", max_chars=3000)
     if not consulta or not consulta.strip():
         return
+    # No ofrecer un informe anterior como si perteneciera al turno nuevo.
+    st.session_state.pop(clave_reporte, None)
+    st.session_state.pop(clave_meta, None)
     indice.actualizar(hogar_id, thread_id)
     with st.chat_message("user"):
         st.markdown(consulta)
