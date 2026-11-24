@@ -24,26 +24,22 @@ class TestInventoryTools(unittest.TestCase):
         with patch.dict(sys.modules, {'langchain_core': types.ModuleType('langchain_core'), 'langchain_core.tools': module}):
             return crear_tools_inventario(self.repo, hogar)
 
-    def test_add_y_consulta(self):
-        add, read = self.tools('casa1')
-        result = add(id='tv_1', nombre='Televisor', potencia_watts='100',
-                     horas_efectivas_por_dia='5', dias_de_uso=20)
-        self.assertEqual(result['estado'], 'ok')
-        self.assertEqual(read()['cantidad_equipos'], 1)
+    def test_solo_devuelve_consulta(self):
+        (read,) = self.tools('casa1')
+        self.assertEqual(read()['cantidad_equipos'], 0)
+        self.assertEqual(read.__name__, 'consultar_inventario')
 
-    def test_aislamiento_por_inyeccion(self):
-        add,_ = self.tools('casa1')
-        _,read2 = self.tools('casa2')
-        add(id='tv_1', nombre='Televisor', potencia_watts='100',
-            horas_efectivas_por_dia='5', dias_de_uso=20)
-        self.assertEqual(read2()['cantidad_equipos'],0)
+    def test_aislamiento_por_hogar(self):
+        self.repo.registrar_equipo('casa1', id='tv_1', nombre='Televisor',
+                                  potencia_watts='100', horas_efectivas_por_dia='5', dias_de_uso=20)
+        (read1,) = self.tools('casa1')
+        (read2,) = self.tools('casa2')
+        self.assertEqual(read1()['cantidad_equipos'], 1)
+        self.assertEqual(read2()['cantidad_equipos'], 0)
 
-    def test_errores_estructurados(self):
-        add,_ = self.tools('casa1')
-        res=add(id='tv_1', nombre='Televisor', potencia_watts='invalido',
-                horas_efectivas_por_dia='5', dias_de_uso=20)
-        self.assertEqual(res['estado'],'error')
-        self.assertEqual(self.repo.consultar('casa1')['cantidad_equipos'],0)
+    def test_hogar_invalido(self):
+        with self.assertRaises(ValueError):
+            self.tools('../casa1')
 
 
 if __name__ == '__main__':

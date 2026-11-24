@@ -6,10 +6,12 @@ from __future__ import annotations
 
 from contextlib import closing
 from decimal import Decimal
+from hashlib import sha256
+import json
 from pathlib import Path
 import re
 import sqlite3
-from typing import Any
+from typing import Any, Mapping
 
 from energia_ai.services.consumption import Electrodomestico, calcular_consumo_equipos
 
@@ -102,13 +104,80 @@ class InventarioHogar:
             filas = conn.execute("""SELECT equipo_id,nombre,potencia_watts,horas_efectivas_por_dia,
                                 dias_de_uso,cantidad FROM equipos WHERE hogar_id=? ORDER BY equipo_id""",
                                 (hogar_id,)).fetchall()
-        equipos = [{"id": f["equipo_id"], "nombre": f["nombre"],
-                    "potencia_watts": f["potencia_watts"],
-                    "horas_efectivas_por_dia": f["horas_efectivas_por_dia"],
-                    "dias_de_uso": f["dias_de_uso"], "cantidad": f["cantidad"]}
-                   for f in filas]
+        equipos = self._filas_desde_sql(filas)
         return {"estado": "ok", "hogar_id": hogar_id, "periodo_dias": hogar["periodo_dias"],
-                "equipos": equipos, "cantidad_equipos": len(equipos)}
+                "equipos": equipos, "cantidad_equipos": len(equipos),
+                "version": self._version_inventario(hogar["periodo_dias"], equipos)}
+
+    @staticmethod
+    def _filas_desde_sql(filas: list[sqlite3.Row]) -> list[dict[str, Any]]:
+        return [{"id": f["equipo_id"], "nombre": f["nombre"],
+                 "potencia_watts": f["potencia_watts"],
+                 "horas_efectivas_por_dia": f["horas_efectivas_por_dia"],
+                 "dias_de_uso": f["dias_de_uso"], "cantidad": f["cantidad"]}
+                for f in filas]
+
+    @staticmethod
+    def _version_inventario(periodo_dias: int, equipos: list[dict[str, Any]]) -> str:
+        """Huella determinística para detectar ediciones desde una vista obsoleta."""
+        canonic = json.dumps({"periodo_dias": periodo_dias, "equipos": equipos},
+                             sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+        return sha256(canonic.encode("utf-8")).hexdigest()
+
+    def reemplazar_equipos(self, hogar_id: str, *, equipos: list[Mapping[str, Any]],
+                           version_esperada: str) -> dict[str, Any]:
+        """Guarda una tabla completa en una sola transacción (altas, ediciones y bajas).
+
+        Si otro proceso modificó el inventario desde que se abrió el editor,
+        se cancela todo el lote en vez de sobrescribir datos sin avisar.
+        """
+        validar_hogar_id(hogar_id)
+        if not isinstance(version_esperada, str) or len(version_esperada) != 64:
+            raise ValueError("Falta la versión original del inventario; recargá la tabla")
+        if not isinstance(equipos, list) or len(equipos) > 30:
+            raise ValueError("El inventario admite como máximo 30 electrodomésticos")
+        validados = []
+        for i, fila in enumerate(equipos, start=1):
+            if not isinstance(fila, Mapping):
+                raise ValueError(f"Fila {i}: formato inválido")
+            try:
+                equipo = Electrodomestico(**{
+                    campo: fila[campo] for campo in
+                    ("id", "nombre", "potencia_watts", "horas_efectivas_por_dia",
+                     "dias_de_uso", "cantidad")
+                })
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(f"Fila {i}: {exc}") from exc
+            validados.append(equipo)
+        if validados:
+            # La validación de consumo también revisa período y IDs duplicados.
+            # El período se consulta dentro de la transacción a continuación.
+            ids = [x.id for x in validados]
+            if len(ids) != len(set(ids)):
+                raise ValueError("Hay IDs de electrodomésticos duplicados")
+
+        with closing(self._abrir()) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE")
+            hogar = conn.execute("SELECT periodo_dias FROM hogares WHERE hogar_id=?", (hogar_id,)).fetchone()
+            if hogar is None:
+                raise ValueError("Hogar no registrado")
+            periodo = hogar["periodo_dias"]
+            if validados:
+                calcular_consumo_equipos(periodo_dias=periodo, equipos=validados)
+            previas = conn.execute("""SELECT equipo_id,nombre,potencia_watts,
+                horas_efectivas_por_dia,dias_de_uso,cantidad FROM equipos
+                WHERE hogar_id=? ORDER BY equipo_id""", (hogar_id,)).fetchall()
+            version_actual = self._version_inventario(periodo, self._filas_desde_sql(previas))
+            if version_actual != version_esperada:
+                raise ValueError("Inventario modificado en otra sesión; recargá antes de guardar")
+            conn.execute("DELETE FROM equipos WHERE hogar_id=?", (hogar_id,))
+            conn.executemany("""INSERT INTO equipos
+                (hogar_id,equipo_id,nombre,potencia_watts,horas_efectivas_por_dia,dias_de_uso,cantidad)
+                VALUES (?,?,?,?,?,?,?)""", [
+                (hogar_id, e.id, e.nombre, str(e.potencia_watts),
+                 str(e.horas_efectivas_por_dia), e.dias_de_uso, e.cantidad)
+                for e in validados])
+        return {"estado": "ok", "hogar_id": hogar_id, "cantidad_equipos": len(validados)}
 
     def consumo_inventario(self, hogar_id: str) -> dict[str, Any]:
         datos = self.consultar(hogar_id)

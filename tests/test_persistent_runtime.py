@@ -18,7 +18,8 @@ class TestRuntime(unittest.TestCase):
         self.assertIn(PROMPT_ANTERIOR, SYSTEM_PROMPT)
         actual = SYSTEM_PROMPT.replace(PROMPT_ANTERIOR, '') + PROMPT_INVENTARIO
         self.assertNotIn('solo el historial del thread en RAM', actual)
-        self.assertIn('registrar_electrodomestico', actual)
+        self.assertIn('Mis electrodomésticos', actual)
+        self.assertNotIn('- registrar_electrodomestico:', actual)
 
     def test_inyeccion_agente_sin_llm(self):
         def module(name):
@@ -30,10 +31,10 @@ class TestRuntime(unittest.TestCase):
         fake['langchain.agents'].create_agent = create
         with patch.dict(sys.modules, fake), patch(
             'energia_ai.agent.persistent_runtime.herramientas_energia_ai', return_value=[1,2,3,4]
-        ), patch('energia_ai.agent.persistent_runtime.crear_tools_inventario', return_value=(5,6)):
+        ), patch('energia_ai.agent.persistent_runtime.crear_tools_inventario', return_value=(5,)):
             self.assertEqual(crear_agente_persistente(checkpointer='saver', repositorio=Mock(), hogar_id='casa1', modelo='modelo'), 'agente')
         kwargs=create.call_args.kwargs
-        self.assertEqual(kwargs['tools'], [1,2,3,4,5,6])
+        self.assertEqual(kwargs['tools'], [1,2,3,4,5])
         self.assertEqual(kwargs['checkpointer'], 'saver')
         self.assertEqual(kwargs['model'], 'modelo')
 
