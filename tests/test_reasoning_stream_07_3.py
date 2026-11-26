@@ -85,7 +85,7 @@ class TestReasoningStream(unittest.TestCase):
         with patch.dict(sys.modules, {"langchain_ollama": fake}):
             crear_modelo()
         self.assertIs(capturado["reasoning"], True)
-        self.assertEqual(capturado["num_ctx"], 8192)
+        self.assertEqual(capturado["num_ctx"], 16384)
         self.assertEqual(capturado["model"], "qwen3.5:9b")
 
     def test_09_no_emite_razonamiento_para_human(self):
