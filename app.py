@@ -155,9 +155,16 @@ def main() -> None:
 
     with st.chat_message("assistant"):
         status = st.status("Consultando a EnergiaAI…", expanded=True)
+        # Canal de razonamiento visible en directo y separado del texto final.
+        # Los deltas llegan desde ChatOllama: no inferimos ni fabricamos pasos.
+        with st.expander("Razonamiento expuesto por Ollama", expanded=True):
+            panel_razonamiento = st.empty()
+            panel_razonamiento.caption("Esperando un bloque de razonamiento del modelo…")
         respuesta = st.empty()
         texto = ""
+        razonamiento = ""
         ultimo_render = monotonic()
+        ultimo_render_razonamiento = monotonic()
         resultado_final = None
         hubo_error = False
         # Primero se muestran solicitudes; después sus ejecuciones confirmadas.
@@ -177,7 +184,16 @@ def main() -> None:
                 if tipo != "evento" or not isinstance(evento, dict):
                     continue
                 clase = evento.get("tipo")
-                if clase == "texto":
+                if clase == "razonamiento":
+                    razonamiento += str(evento.get("texto", ""))
+                    # Evita saturar Streamlit mientras Qwen emite muchos deltas.
+                    if monotonic() - ultimo_render_razonamiento >= 0.20:
+                        visible = razonamiento[-30000:]
+                        if len(razonamiento) > 30000:
+                            visible = "[Vista limitada a los últimos 30.000 caracteres]\n" + visible
+                        panel_razonamiento.code(visible, language=None)
+                        ultimo_render_razonamiento = monotonic()
+                elif clase == "texto":
                     texto += str(evento.get("texto", ""))
                     if monotonic() - ultimo_render >= 0.12:
                         respuesta.markdown(texto)
@@ -210,12 +226,24 @@ def main() -> None:
         except Exception as exc:
             hubo_error = True
             st.error(f"Fallo de presentación ({type(exc).__name__}); la operación podría haber continuado en el servidor.")
+        if razonamiento.strip():
+            visible = razonamiento[-30000:]
+            if len(razonamiento) > 30000:
+                visible = "[Vista limitada a los últimos 30.000 caracteres]\n" + visible
+            panel_razonamiento.code(visible, language=None)
+        else:
+            panel_razonamiento.caption("El proveedor no expuso razonamiento en este turno.")
         if texto.strip():
             respuesta.markdown(texto)
         elif not hubo_error:
-            st.info("El agente no produjo texto final. Revisá la traza antes de repetir el pedido.")
+            st.warning("El agente terminó sin respuesta final. El razonamiento, si existe, "
+                       "NO sustituye la respuesta ni demuestra ejecución de tools.")
         if not hubo_error:
-            status.update(label=f"Ejecución finalizada · {solicitudes} solicitudes de tools", state="complete")
+            if texto.strip():
+                status.update(label=f"Ejecución terminada · {solicitudes} solicitudes de tools",
+                              state="complete")
+            else:
+                status.update(label="Ejecución incompleta · sin respuesta final", state="error")
         if isinstance(resultado_final, dict):
             tiempo = resultado_final.get("duracion_total_s")
             if isinstance(tiempo, (int, float)):
