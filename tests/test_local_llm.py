@@ -54,7 +54,7 @@ class TestLocalLLM(unittest.TestCase):
         with patch.dict('os.environ', {}, clear=True):
             c = config_local()
         self.assertEqual(c['model'], 'qwen3.5:9b')
-        self.assertEqual(c['num_ctx'], 8192)
+        self.assertEqual(c['num_ctx'], 16384)
 
     def test_resumen_identifica_ejecucion_real(self):
         ms = [HumanMessage('hola'), AIMessage('solicito tool'), ToolMessage('calcular_consumo', '{"total":"10"}')]

@@ -10,7 +10,7 @@ from urllib.request import urlopen
 
 DEFAULT_MODEL = "qwen3.5:9b"
 DEFAULT_BASE_URL = "http://127.0.0.1:11434"
-DEFAULT_NUM_CTX = 8192
+DEFAULT_NUM_CTX = 16384
 
 
 class LocalModelError(RuntimeError):
