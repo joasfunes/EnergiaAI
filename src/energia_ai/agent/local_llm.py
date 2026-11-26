@@ -71,6 +71,9 @@ def crear_modelo():
         base_url=config["base_url"],
         temperature=0,
         num_ctx=config["num_ctx"],
+        # Separa el razonamiento que OLLAMA expone del texto final.
+        # No modificar el modelo ni enviar el razonamiento como respuesta.
+        reasoning=True,
     )
 
 
